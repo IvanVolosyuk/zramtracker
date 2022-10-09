@@ -18,6 +18,13 @@ void fail_with_perror() {
   exit(1);
 }
 
+void print_timestamp() {
+  time_t t = time(NULL);
+  char *s = ctime(&t);
+  s[strlen(s)-1] = '\0';
+  fprintf(stderr, "%s: ", s);
+}
+
 void readfile(const char* name) {
   int fd = open(name, O_RDONLY);
   if (fd == -1) {
@@ -35,16 +42,19 @@ void readfile(const char* name) {
 }
 
 void writefile(const char* name, const char* content) {
-  printf("Writting to %s...\n", name);
+  print_timestamp();
+  printf("Writting to %s ", name);
   int fd = open(name, O_WRONLY | O_TRUNC | O_APPEND, 0777);
   if (fd == -1) {
+    print_timestamp();
     fprintf(stderr, "Failed to read %s\n", name);
     fail_with_perror();
   }
 
-  printf("Content: [%s]\n", content);
+  printf("content: [%s]\n", content);
   int res = write(fd, content, strlen(content));
   if (res < strlen(content)) {
+    print_timestamp();
     fprintf(stderr, "Failed to write command: %s -> %s\n", content, name);
     perror("Error");
   }
@@ -118,10 +128,12 @@ void control_loop() {
     /*printf("Huge pages: %ld\n", stats.huge_pages);*/
     /*printf("\n");*/
     if (stats.mem_used_total - stats.compr_data_size > (1L << 30)) {
+      print_timestamp();
       fprintf(stderr, "Request compaction...\n");
       writefile(ZRAM("compact"), "1");
     }
     if (stats.compr_data_size * 4 > stats.mem_limit) {
+      print_timestamp();
       fprintf(stderr, "Request writeback 1h old pages...\n");
       writefile(ZRAM("writeback"), "idle");
       sleep(60);
@@ -133,6 +145,9 @@ void control_loop() {
 }
 
 int main(int arch, char** argv) {
+  print_timestamp();
+  fprintf(stderr, "Started...\n");
+
   mlockall(MCL_CURRENT|MCL_FUTURE |MCL_ONFAULT);
   // Kernel 5.16 supports writting only old pages, 5.10 doesn't
   writefile(ZRAM("idle"), "all");
