@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
 #define ZRAM(a) "/sys/block/zram0/" a
 #define MB(v) (double) (v / (1024. * 1024.))
@@ -43,7 +44,7 @@ void readfile(const char* name) {
 
 void writefile(const char* name, const char* content) {
   print_timestamp();
-  printf("Writting to %s ", name);
+  fprintf(stderr, "Writting to %s ", name);
   int fd = open(name, O_WRONLY | O_TRUNC | O_APPEND, 0777);
   if (fd == -1) {
     print_timestamp();
@@ -51,7 +52,7 @@ void writefile(const char* name, const char* content) {
     fail_with_perror();
   }
 
-  printf("content: [%s]\n", content);
+  fprintf(stderr, "content: [%s]\n", content);
   int res = write(fd, content, strlen(content));
   if (res < strlen(content)) {
     print_timestamp();
@@ -87,7 +88,7 @@ size_t readnum(const char* filename) {
  ================ =============================================================
 */
 
-struct Stats {
+typedef struct Stats {
   size_t orig_data_size;
   size_t compr_data_size;
   size_t mem_used_total;
@@ -96,7 +97,7 @@ struct Stats {
   size_t same_pages;
   size_t pages_compacted;
   size_t huge_pages;
-};
+} Stats;
 
 Stats readstats() {
   readfile(ZRAM("mm_stat"));
@@ -127,14 +128,19 @@ void control_loop() {
     /*printf("Compacted pages: %ld\n", stats.pages_compacted);*/
     /*printf("Huge pages: %ld\n", stats.huge_pages);*/
     /*printf("\n");*/
+
+    // Compact if more than 1GB wasted in compressed data.
     if (stats.mem_used_total - stats.compr_data_size > (1L << 30)) {
       print_timestamp();
       fprintf(stderr, "Request compaction...\n");
       writefile(ZRAM("compact"), "1");
     }
+
+    // Spill if ram usage is more than 25% of the mem_limit. Writing to backing
+    // store takes time, so it's better to be extra safe.
     if (stats.compr_data_size * 4 > stats.mem_limit) {
       print_timestamp();
-      fprintf(stderr, "Request writeback 1h old pages...\n");
+      fprintf(stderr, "Request writeback idle pages...\n");
       writefile(ZRAM("writeback"), "idle");
       sleep(60);
       writefile(ZRAM("idle"), "all");

@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define ZRAM(a) "/sys/block/zram0/" a
 #define MB(v) (double) (v / (1024. * 1024.))
@@ -83,7 +84,7 @@ void read_ints(size_t* output) {
  ================ =============================================================
 */
 
-struct Stats {
+typedef struct Stats {
   size_t orig_data_size;
   size_t compr_data_size;
   size_t mem_used_total;
@@ -92,7 +93,7 @@ struct Stats {
   size_t same_pages;
   size_t pages_compacted;
   size_t huge_pages;
-};
+} Stats;
 
 /*
  ============== =============================================================
@@ -104,11 +105,11 @@ struct Stats {
                 Unit: 4K bytes
 */
 
-struct BdStats {
+typedef struct BdStats {
   size_t bd_count;
   size_t reads;
   size_t writes;
-};
+} BdStats;
 
 Stats readstats() {
   readfile(ZRAM("mm_stat"));
@@ -125,7 +126,6 @@ BdStats readbdstats() {
 }
 
 void control_loop() {
-  while (true) {
     Stats stats = readstats();
     printf("Orig: %0.1f MB\n", MB(stats.orig_data_size));
     printf("Compr: %0.1f MB\n", MB(stats.compr_data_size));
@@ -134,7 +134,7 @@ void control_loop() {
     printf("Mem limit: %0.1f MB\n", MB(stats.mem_limit));
     printf("Same pages: %ld\n", stats.same_pages);
     printf("Compacted pages: %ld\n", stats.pages_compacted);
-    printf("Huge pages: %ld\n", stats.huge_pages);
+    printf("Incompressible pages: %ld\n", stats.huge_pages);
 
     BdStats bdstats = readbdstats();
     printf("Stored on  backing device: %0.1f MB\n", MB(bdstats.bd_count * 4096));
@@ -150,8 +150,6 @@ void control_loop() {
     /*  writefile(ZRAM("writeback"), "idle");*/
     /*}*/
     printf("\n");
-    sleep(60);
-  }
 }
 
 int main(int arch, char** argv) {
